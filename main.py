@@ -16,7 +16,8 @@ from utils import progress_bar
 
 
 parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training')
-parser.add_argument('--lr', default=0.1, type=float, help='learning rate')
+# lr=0.1 for mlp with bias and 0.01 without bias
+parser.add_argument('--lr', default=0.01, type=float, help='learning rate')
 parser.add_argument('--resume', '-r', action='store_true',
                     help='resume from checkpoint')
 args = parser.parse_args()
@@ -68,7 +69,8 @@ print('==> Building model..')
 # net = ShuffleNetV2(1)
 # net = EfficientNetB0()
 # net = RegNetX_200MF()
-net = SimpleDLA()
+# net = SimpleDLA()
+net = MLP()
 net = net.to(device)
 if device == 'cuda':
     net = torch.nn.DataParallel(net)
