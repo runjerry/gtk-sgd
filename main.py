@@ -8,11 +8,14 @@ import torch.backends.cudnn as cudnn
 import torchvision
 import torchvision.transforms as transforms
 
+from tensorboardX import SummaryWriter
+
 import os
 import argparse
 
 from models import *
-from utils import progress_bar
+from utils import progress_bar, set_random_seed
+from injective_sgd import iSGD
 
 
 parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training')
@@ -20,11 +23,18 @@ parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training')
 parser.add_argument('--lr', default=0.01, type=float, help='learning rate')
 parser.add_argument('--resume', '-r', action='store_true',
                     help='resume from checkpoint')
+parser.add_argument('--optimizer', default='isgd', type=str)
+parser.add_argument('--log_dir', default='runs/cifar10', type=str)
+parser.add_argument('--epoch', default=200, type=int)
+parser.add_argument('--seed', default=None, type=int)
+parser.add_argument('--extra', default=None, type=str)
+
 args = parser.parse_args()
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
-best_acc = 0  # best test accuracy
-start_epoch = 0  # start from epoch 0 or last checkpoint epoch
+
+# set random seed
+seed = set_random_seed(args.seed)
 
 # Data
 print('==> Preparing data..')
@@ -73,9 +83,12 @@ print('==> Building model..')
 net = MLP()
 net = net.to(device)
 if device == 'cuda':
-    net = torch.nn.DataParallel(net)
+    # net = torch.nn.DataParallel(net)
     cudnn.benchmark = True
 
+# Training config
+start_epoch = 0  # start from epoch 0 or last checkpoint epoch
+best_acc = 0  # best test accuracy
 if args.resume:
     # Load checkpoint.
     print('==> Resuming from checkpoint..')
@@ -84,11 +97,32 @@ if args.resume:
     net.load_state_dict(checkpoint['net'])
     best_acc = checkpoint['acc']
     start_epoch = checkpoint['epoch']
+    print('==> Loaded checkpoint at epoch: %d, acc: %.2f%%' % (start_epoch, best_acc))
 
 criterion = nn.CrossEntropyLoss()
-optimizer = optim.SGD(net.parameters(), lr=args.lr,
-                      momentum=0.9, weight_decay=5e-4)
-scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=200)
+# optimizer = optim.SGD(net.parameters(), lr=args.lr,
+#                       momentum=0.9, weight_decay=5e-4)
+if args.optimizer == 'sgd':
+    optimizer = optim.SGD(net.parameters(), lr=args.lr)
+elif args.optimizer == 'isgd':
+    optimizer = iSGD(net.parameters(), lr=args.lr)
+else:
+    raise ValueError(f"{args.optimizer} optimizer is not supported.")
+lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=200)
+
+# Summary writter
+if args.extra is None:
+    str_extra = ''
+else:
+    str_extra = '_' + args.extra
+log_dir = os.path.join(
+    args.log_dir, args.optimizer,
+    'lr%.3f_epoch%d_seed%d%s' % (args.lr, args.epoch, args.seed, str_extra))
+if not os.path.isdir(log_dir):
+    os.makedirs(log_dir)
+writer = SummaryWriter(log_dir)
+writer.add_hparams(vars(args), {'train/args': 0.})
+# metrics = {'train/lr': None, 'train/loss': None, 'train/acc': None}
 
 
 # Training
@@ -98,6 +132,7 @@ def train(epoch):
     train_loss = 0
     correct = 0
     total = 0
+    writer.add_scalar('train/lr', lr_scheduler.get_lr()[0], epoch)
     for batch_idx, (inputs, targets) in enumerate(trainloader):
         inputs, targets = inputs.to(device), targets.to(device)
         optimizer.zero_grad()
@@ -113,6 +148,9 @@ def train(epoch):
 
         progress_bar(batch_idx, len(trainloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
                      % (train_loss/(batch_idx+1), 100.*correct/total, correct, total))
+
+    writer.add_scalar('train/loss', train_loss/(batch_idx + 1), epoch)
+    writer.add_scalar('train/acc', 100. * correct / total, epoch)
 
 
 def test(epoch):
@@ -135,8 +173,11 @@ def test(epoch):
             progress_bar(batch_idx, len(testloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
                          % (test_loss/(batch_idx+1), 100.*correct/total, correct, total))
 
+    acc = 100. * correct / total
+    writer.add_scalar('test/loss', test_loss / (batch_idx + 1), epoch)
+    writer.add_scalar('test/acc', acc, epoch)
+
     # Save checkpoint.
-    acc = 100.*correct/total
     if acc > best_acc:
         print('Saving..')
         state = {
@@ -150,7 +191,15 @@ def test(epoch):
         best_acc = acc
 
 
-for epoch in range(start_epoch, start_epoch+200):
-    train(epoch)
-    test(epoch)
-    scheduler.step()
+def main():
+    for epoch in range(start_epoch, args.epoch):
+        train(epoch)
+        test(epoch)
+        lr_scheduler.step()
+    # writer.add_hparams(vars(args), metrics)
+    writer.close()
+    return best_acc
+
+
+if __name__ == '__main__':
+    main()

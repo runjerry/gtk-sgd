@@ -2,10 +2,9 @@
 import torch.nn as nn
 import torch.nn.functional as F
 
-use_bias = False
 
 class MLP(nn.Module):
-    def __init__(self):
+    def __init__(self, use_bias=False):
         super().__init__()
         self.fc1   = nn.Linear(3*32*32, 2634, bias=use_bias)
         self.fc2   = nn.Linear(2634, 2196, bias=use_bias)
