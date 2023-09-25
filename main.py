@@ -8,10 +8,12 @@ import torch.backends.cudnn as cudnn
 import torchvision
 import torchvision.transforms as transforms
 
-from tensorboardX import SummaryWriter
+# from tensorboardX import SummaryWriter
+from torch.utils.tensorboard import SummaryWriter
 
 import os
 import argparse
+from tqdm import tqdm
 
 from models import *
 from utils import progress_bar, set_random_seed
@@ -23,10 +25,13 @@ parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training')
 parser.add_argument('--lr', default=0.01, type=float, help='learning rate')
 parser.add_argument('--resume', '-r', action='store_true',
                     help='resume from checkpoint')
+parser.add_argument('--model', default='mlp1', type=str)
 parser.add_argument('--optimizer', default='isgd', type=str)
-parser.add_argument('--log_dir', default='runs/cifar10', type=str)
+parser.add_argument('--log_dir', default='runs/mlp/cifar10', type=str)
 parser.add_argument('--epoch', default=200, type=int)
 parser.add_argument('--seed', default=None, type=int)
+parser.add_argument('--renorm', default=None, type=str)
+parser.add_argument('--init', default=None, type=str)
 parser.add_argument('--extra', default=None, type=str)
 
 args = parser.parse_args()
@@ -80,7 +85,16 @@ print('==> Building model..')
 # net = EfficientNetB0()
 # net = RegNetX_200MF()
 # net = SimpleDLA()
-net = MLP()
+
+if args.model == 'mlp1':
+    net = MLP(initializer=args.init)
+elif args.model == 'mlp2':
+    net = MLP2(initializer=args.init)
+elif args.model == 'mlp3':
+    net = MLP3(initializer=args.init)
+else:
+    raise ValueError(f"{args.model} is not a supported model.")
+
 net = net.to(device)
 if device == 'cuda':
     # net = torch.nn.DataParallel(net)
@@ -105,24 +119,29 @@ criterion = nn.CrossEntropyLoss()
 if args.optimizer == 'sgd':
     optimizer = optim.SGD(net.parameters(), lr=args.lr)
 elif args.optimizer == 'isgd':
-    optimizer = iSGD(net.parameters(), lr=args.lr)
+    optimizer = iSGD(
+        net.parameters(), lr=args.lr, renorm=args.renorm)
 else:
     raise ValueError(f"{args.optimizer} optimizer is not supported.")
 lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=200)
 
 # Summary writter
+if args.renorm is None:
+    str_renorm = ''
+else:
+    str_renorm = '_renorm-' + args.renorm
 if args.extra is None:
     str_extra = ''
 else:
     str_extra = '_' + args.extra
 log_dir = os.path.join(
     args.log_dir, args.optimizer,
-    'lr%.3f_epoch%d_seed%d%s' % (args.lr, args.epoch, args.seed, str_extra))
+    '%s_lr%.3f_epoch%d_seed%d_init-%s%s%s' % (
+        args.model, args.lr, args.epoch, args.seed, 
+        args.init, str_renorm, str_extra))
 if not os.path.isdir(log_dir):
     os.makedirs(log_dir)
 writer = SummaryWriter(log_dir)
-writer.add_hparams(vars(args), {'train/args': 0.})
-# metrics = {'train/lr': None, 'train/loss': None, 'train/acc': None}
 
 
 # Training
@@ -132,8 +151,13 @@ def train(epoch):
     train_loss = 0
     correct = 0
     total = 0
-    writer.add_scalar('train/lr', lr_scheduler.get_lr()[0], epoch)
-    for batch_idx, (inputs, targets) in enumerate(trainloader):
+    writer.add_scalar('train/lr', lr_scheduler.get_last_lr()[0], epoch)
+    desc = ('[%s][LR=%.4f] Loss: %.3f | Acc: %.3f%% (%d/%d)' %
+            (args.optimizer, lr_scheduler.get_last_lr()[0], 0, 0, correct, total))
+    prog_bar = tqdm(enumerate(trainloader), total=len(trainloader), 
+                    desc=desc, leave=True)
+    # for batch_idx, (inputs, targets) in enumerate(trainloader):
+    for batch_idx, (inputs, targets) in prog_bar:
         inputs, targets = inputs.to(device), targets.to(device)
         optimizer.zero_grad()
         outputs = net(inputs)
@@ -146,8 +170,13 @@ def train(epoch):
         total += targets.size(0)
         correct += predicted.eq(targets).sum().item()
 
-        progress_bar(batch_idx, len(trainloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
-                     % (train_loss/(batch_idx+1), 100.*correct/total, correct, total))
+        desc = ('[%s][LR=%.4f] Loss: %.3f | Acc: %.3f%% (%d/%d)' %
+                (args.optimizer, lr_scheduler.get_last_lr()[0], train_loss / (batch_idx + 1), 
+                 100. * correct / total, correct, total))
+        prog_bar.set_description(desc, refresh=True)
+
+        # progress_bar(batch_idx, len(trainloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
+        #              % (train_loss/(batch_idx+1), 100.*correct/total, correct, total))
 
     writer.add_scalar('train/loss', train_loss/(batch_idx + 1), epoch)
     writer.add_scalar('train/acc', 100. * correct / total, epoch)
@@ -159,8 +188,13 @@ def test(epoch):
     test_loss = 0
     correct = 0
     total = 0
+    desc = ('[%s][LR=%.4f] Loss: %.3f | Acc: %.3f%% (%d/%d)'
+            % (args.optimizer, lr_scheduler.get_last_lr()[0], test_loss/(0+1), 0, correct, total))
+
+    prog_bar = tqdm(enumerate(testloader), total=len(testloader), desc=desc, leave=True)
     with torch.no_grad():
-        for batch_idx, (inputs, targets) in enumerate(testloader):
+        # for batch_idx, (inputs, targets) in enumerate(testloader):
+        for batch_idx, (inputs, targets) in prog_bar:
             inputs, targets = inputs.to(device), targets.to(device)
             outputs = net(inputs)
             loss = criterion(outputs, targets)
@@ -170,8 +204,13 @@ def test(epoch):
             total += targets.size(0)
             correct += predicted.eq(targets).sum().item()
 
-            progress_bar(batch_idx, len(testloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
-                         % (test_loss/(batch_idx+1), 100.*correct/total, correct, total))
+            desc = ('[%s][LR=%.4f] Loss: %.3f | Acc: %.3f%% (%d/%d)'
+                    % (args.optimizer, lr_scheduler.get_last_lr()[0], test_loss / (batch_idx + 1), 
+                       100. * correct / total, correct, total))
+            prog_bar.set_description(desc, refresh=True)
+
+            # progress_bar(batch_idx, len(testloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
+            #              % (test_loss/(batch_idx+1), 100.*correct/total, correct, total))
 
     acc = 100. * correct / total
     writer.add_scalar('test/loss', test_loss / (batch_idx + 1), epoch)
