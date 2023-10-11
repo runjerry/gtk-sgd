@@ -10,7 +10,7 @@ class iSGD(Optimizer):
 
     def __init__(self, params, lr=required, 
                  momentum=0, weight_decay=0,
-                 normalize_grad=True,
+                 normalize_grad=False,
                  renorm=None):
         defaults = dict(lr=lr, momentum=momentum, weight_decay=weight_decay)
         super().__init__(params, defaults)
@@ -69,9 +69,9 @@ class iSGD(Optimizer):
         norm_prod = 1.
         for idx, param in enumerate(params):
             if self._renorm == 'firstlayer':
-                grad = param.grad.data + coeff[idx] * param.data * param.grad.data 
+                grad = param.grad.data + coeff[idx] * param.data
             else:
-                grad = param.grad.data + coeff[idx] * pdata[idx] * param.grad.data 
+                grad = param.grad.data + coeff[idx] * pdata[idx] 
 
             param.data.add_(grad, alpha=-group['lr'])
 

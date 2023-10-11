@@ -5,7 +5,7 @@ import torch.nn.init as init
 
 
 class MLP(nn.Module):
-    def __init__(self, use_bias=False, initializer='kaiming'):
+    def __init__(self, use_bias=True, initializer='kaiming'):
         super().__init__()
         self.fc1   = nn.Linear(3*32*32, 2634, bias=use_bias)
         self.fc2   = nn.Linear(2634, 2196, bias=use_bias)

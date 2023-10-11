@@ -18,6 +18,7 @@ from tqdm import tqdm
 from models import *
 from utils import progress_bar, set_random_seed
 from injective_sgd import iSGD
+from slice_sgd import sSGD
 
 
 parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training')
@@ -120,6 +121,9 @@ if args.optimizer == 'sgd':
     optimizer = optim.SGD(net.parameters(), lr=args.lr)
 elif args.optimizer == 'isgd':
     optimizer = iSGD(
+        net.parameters(), lr=args.lr, renorm=args.renorm)
+elif args.optimizer == 'ssgd':
+    optimizer = sSGD(
         net.parameters(), lr=args.lr, renorm=args.renorm)
 else:
     raise ValueError(f"{args.optimizer} optimizer is not supported.")
