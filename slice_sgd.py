@@ -42,9 +42,10 @@ class sSGD(Optimizer):
                 # # test
                 # params[idx * 2 +1].data.div_(g_norms[idx])
 
-                # upd2
-                bias = params[idx * 2 + 1].data
-                bias.div_(bias.norm())
+                # # upd2
+                # bias = params[idx * 2 + 1].data
+                # bias.div_(bias.norm())
+
             else:
                 bias = params[idx * 2 + 1].data
                 g_norms[idx] = ((weight * weight).sum() + \
@@ -55,8 +56,6 @@ class sSGD(Optimizer):
 
         norm_prod = norm_prod ** (1/self._depth)
 
-        # upd
-        # for param in params:
         for param in params[:-1]:
             param.data.mul_(norm_prod)
 
@@ -65,21 +64,22 @@ class sSGD(Optimizer):
         params = group['params']
 
         layer_sum = torch.zeros(self._depth, device=params[0].device)
+        if self._renorm == 'firstlayer':
+            w1 = params[0]
+            b1 = params[1]
+            layer_norm = (w1 * w1).sum() + (b1 * b1).sum()
+
         for idx in range(self._depth):
             weight = params[idx * 2]
             layer_sum[idx] = (weight.data * weight.grad.data).sum()
-            layer_norm = (weight.data * weight.data).sum()
+            if self._renorm == 'layerwise':
+                layer_norm = (weight.data * weight.data).sum()
 
-            # if idx != self._depth - 1:
-            #     bias = params[idx * 2 + 1]
-            #     layer_sum[idx] += (bias.data * bias.grad.data).sum()
-            #     layer_norm += (bias.data * bias.data).sum()
-
-            # correct2
-            bias = params[idx * 2 + 1]
-            layer_norm += (bias.data * bias.data).sum()
             if idx != self._depth - 1:
+                bias = params[idx * 2 + 1]
                 layer_sum[idx] += (bias.data * bias.grad.data).sum()
+                if self._renorm == "layerwise":
+                    layer_norm += (bias.data * bias.data).sum()
 
             layer_sum[idx] /= layer_norm
 

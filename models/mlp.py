@@ -71,7 +71,7 @@ class MLP(nn.Module):
 
 
 class MLP2(nn.Module):
-    def __init__(self, use_bias=False, initializer='kaiming'):
+    def __init__(self, use_bias=True, initializer='kaiming'):
         super().__init__()
         self.fc1   = nn.Linear(3*32*32, 1024, bias=use_bias)
         self.fc2   = nn.Linear(1024, 1024, bias=use_bias)
