@@ -19,6 +19,7 @@ from models import *
 from utils import progress_bar, set_random_seed
 from injective_sgd import iSGD
 from slice_sgd import sSGD
+from gtk_sgd import affineSGD
 
 
 parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training')
@@ -27,11 +28,20 @@ parser.add_argument('--lr', default=0.01, type=float, help='learning rate')
 parser.add_argument('--resume', '-r', action='store_true',
                     help='resume from checkpoint')
 parser.add_argument('--model', default='mlp1', type=str)
-parser.add_argument('--optimizer', default='isgd', type=str)
-parser.add_argument('--log_dir', default='runs/mlp/cifar10', type=str)
+parser.add_argument('--act', default='relu', type=str)
+parser.add_argument('--bias', action='store_false')
+parser.add_argument('--fullrank', action='store_true')
+parser.add_argument('--fixedRV', action='store_true')
+parser.add_argument('--weightonly', action='store_true')
+parser.add_argument('--samenorm', action='store_true')
+parser.add_argument('--norm', action='store_true')
+parser.add_argument('--diag', action='store_true')
+parser.add_argument('--optimizer', default='sgd', type=str)
+parser.add_argument('--log_dir', default='runs/cifar10', type=str)
 parser.add_argument('--epoch', default=200, type=int)
 parser.add_argument('--seed', default=None, type=int)
 parser.add_argument('--renorm', default=None, type=str)
+parser.add_argument('--option3', action='store_true')
 parser.add_argument('--init', default=None, type=str)
 parser.add_argument('--extra', default=None, type=str)
 
@@ -88,11 +98,11 @@ print('==> Building model..')
 # net = SimpleDLA()
 
 if args.model == 'mlp1':
-    net = MLP(initializer=args.init)
+    net = MLP(initializer=args.init, use_bias=args.bias, activation=args.act)
 elif args.model == 'mlp2':
-    net = MLP2(initializer=args.init)
+    net = MLP2(initializer=args.init, use_bias=args.bias)
 elif args.model == 'mlp3':
-    net = MLP3(initializer=args.init)
+    net = MLP3(initializer=args.init, use_bias=args.bias)
 else:
     raise ValueError(f"{args.model} is not a supported model.")
 
@@ -121,28 +131,65 @@ if args.optimizer == 'sgd':
     optimizer = optim.SGD(net.parameters(), lr=args.lr)
 elif args.optimizer == 'isgd':
     optimizer = iSGD(
-        net.parameters(), lr=args.lr, renorm=args.renorm)
+        net.parameters(), lr=args.lr, option3=args.option3, renorm=args.renorm)
 elif args.optimizer == 'ssgd':
     optimizer = sSGD(
-        net.parameters(), lr=args.lr, renorm=args.renorm)
+        net.parameters(), lr=args.lr, option3=args.option3, renorm=args.renorm)
+elif args.optimizer == 'gtk':
+    optimizer = affineSGD(net.parameters(), lr=args.lr,
+                          use_bias=args.bias, fullrank=args.fullrank,
+                          fixed_rand_vec=args.fixedRV,
+                          weight_only=args.weightonly,
+                          same_norm=args.samenorm,
+                          norm=args.norm,
+                          diag=args.diag)
 else:
     raise ValueError(f"{args.optimizer} optimizer is not supported.")
 lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=200)
 
 # Summary writter
+if args.fullrank:
+    str_fullrank = '_fullrank'
+else:
+    str_fullrank = ''
+if args.fixedRV:
+    str_rv = '_fixedRV'
+else:
+    str_rv = ''
+if args.weightonly:
+    str_wo = '_weightonly'
+else:
+    str_wo = ''
+if args.samenorm:
+    str_sn = '_samenorm'
+else:
+    str_sn = ''
+if args.norm:
+    str_norm = '_norm'
+else:
+    str_norm = ''
+if args.diag:
+    str_diag = '_diag'
+else:
+    str_diag = ''
 if args.renorm is None:
     str_renorm = ''
 else:
     str_renorm = '_renorm-' + args.renorm
+if args.option3:
+    str_option3 = '_option3'
+else:
+    str_option3 = ''
 if args.extra is None:
     str_extra = ''
 else:
     str_extra = '_' + args.extra
 log_dir = os.path.join(
     args.log_dir, args.optimizer,
-    '%s_lr%.3f_epoch%d_seed%d_init-%s%s%s' % (
-        args.model, args.lr, args.epoch, args.seed, 
-        args.init, str_renorm, str_extra))
+    '%s_%s_lr%.3f_epoch%d_seed%d_init-%s%s%s%s%s%s%s%s%s%s' % (
+        args.model, args.act, args.lr, args.epoch, args.seed,
+        args.init, str_fullrank, str_rv, str_wo, str_sn, str_norm, str_diag,
+        str_renorm, str_option3, str_extra))
 if not os.path.isdir(log_dir):
     os.makedirs(log_dir)
 writer = SummaryWriter(log_dir)

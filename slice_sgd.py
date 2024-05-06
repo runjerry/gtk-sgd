@@ -11,6 +11,7 @@ class sSGD(Optimizer):
     def __init__(self, params, lr=required, 
                  momentum=0, weight_decay=0,
                  normalize_grad=False,
+                 option3=False,
                  renorm=None):
         defaults = dict(lr=lr, momentum=momentum, weight_decay=weight_decay)
         super().__init__(params, defaults)
@@ -18,6 +19,7 @@ class sSGD(Optimizer):
             assert renorm in ['firstlayer', 'layerwise']
         self._renorm = renorm
         self._normalize_grad = normalize_grad
+        self._option3 = option3
         # self._momentum = momentum
         # self._weight_decay = weight_decay
 
@@ -83,7 +85,11 @@ class sSGD(Optimizer):
 
             layer_sum[idx] /= layer_norm
 
-        coeff = (layer_sum.mean() - layer_sum)
+        if self._option3:
+            const3 = layer_sum.sum()
+        else:
+            const3 = layer_sum.mean()
+        coeff = (const3 - layer_sum)
 
         g_norms = torch.zeros(self._depth, device=coeff.device)
         norm_prod = 1.

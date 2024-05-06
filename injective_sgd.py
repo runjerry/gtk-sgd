@@ -11,6 +11,7 @@ class iSGD(Optimizer):
     def __init__(self, params, lr=required, 
                  momentum=0, weight_decay=0,
                  normalize_grad=False,
+                 option3=False,
                  renorm=None):
         defaults = dict(lr=lr, momentum=momentum, weight_decay=weight_decay)
         super().__init__(params, defaults)
@@ -18,6 +19,7 @@ class iSGD(Optimizer):
             assert renorm in ['firstlayer', 'layerwise']
         self._renorm = renorm
         self._normalize_grad = normalize_grad
+        self._option3 = option3
         # self._momentum = momentum
         # self._weight_decay = weight_decay
 
@@ -54,7 +56,11 @@ class iSGD(Optimizer):
             else:
                 layer_sum = [(p.data * p.grad.data).sum() for p in params]
             layer_sum = torch.stack(layer_sum, dim=0)
-            coeff = (layer_sum.mean() - layer_sum) / w1_norm
+            if self._option3:
+                const3 = layer_sum.sum()
+            else:
+                const3 = layer_sum.mean()
+            coeff = (const3 - layer_sum) / w1_norm
         else:
             pdata = [p.data / p.data.norm() for p in params]
             if self._normalize_grad:
@@ -64,7 +70,11 @@ class iSGD(Optimizer):
                 layer_sum = [
                     (data * p.grad.data).sum() for (data, p) in zip(pdata, params)]
             layer_sum = torch.stack(layer_sum, dim=0)
-            coeff = (layer_sum.mean() - layer_sum)
+            if self._option3:
+                const3 = layer_sum.sum()
+            else:
+                const3 = layer_sum.mean()
+            coeff = (const3 - layer_sum)
 
         norm_prod = 1.
         for idx, param in enumerate(params):

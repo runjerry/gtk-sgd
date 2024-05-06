@@ -5,15 +5,15 @@ import torch.nn.init as init
 
 
 class MLP(nn.Module):
-    def __init__(self, use_bias=True, initializer='kaiming'):
+    def __init__(self, use_bias=True, initializer='kaiming', activation='relu'):
         super().__init__()
-        self.fc1   = nn.Linear(3*32*32, 2634, bias=use_bias)
-        self.fc2   = nn.Linear(2634, 2196, bias=use_bias)
-        self.fc3   = nn.Linear(2196, 1758, bias=use_bias)
-        self.fc4   = nn.Linear(1758, 1320, bias=use_bias)
-        self.fc5   = nn.Linear(1320, 882, bias=use_bias)
-        self.fc6   = nn.Linear(882, 444, bias=use_bias)
-        self.fc7   = nn.Linear(444, 10, bias=use_bias)
+        self.fc1 = nn.Linear(3 * 32 * 32, 2634, bias=use_bias)
+        self.fc2 = nn.Linear(2634, 2196, bias=use_bias)
+        self.fc3 = nn.Linear(2196, 1758, bias=use_bias)
+        self.fc4 = nn.Linear(1758, 1320, bias=use_bias)
+        self.fc5 = nn.Linear(1320, 882, bias=use_bias)
+        self.fc6 = nn.Linear(882, 444, bias=use_bias)
+        self.fc7 = nn.Linear(444, 10, bias=use_bias)
 
         if initializer == 'xavier':
             init_fn = nn.init.xavier_normal_
@@ -58,27 +58,36 @@ class MLP(nn.Module):
                 init_fn(self.fc6.bias.data)
                 init_fn(self.fc7.bias.data)
 
+        if activation == 'relu':
+            self._activation = F.relu
+        elif activation == 'elu':
+            self._activation = F.elu
+        elif activation == 'gelu':
+            self._activation = F.gelu
+        elif activation == 'selu':
+            self._activation = F.selu
+
     def forward(self, x):
         x = x.view(x.shape[0], -1)
-        x = F.relu(self.fc1(x))
-        x = F.relu(self.fc2(x))
-        x = F.relu(self.fc3(x))
-        x = F.relu(self.fc4(x))
-        x = F.relu(self.fc5(x))
-        x = F.relu(self.fc6(x))
-        x = F.relu(self.fc7(x))
+        x = self._activation(self.fc1(x))
+        x = self._activation(self.fc2(x))
+        x = self._activation(self.fc3(x))
+        x = self._activation(self.fc4(x))
+        x = self._activation(self.fc5(x))
+        x = self._activation(self.fc6(x))
+        x = self.fc7(x)
         return x
 
 
 class MLP2(nn.Module):
     def __init__(self, use_bias=True, initializer='kaiming'):
         super().__init__()
-        self.fc1   = nn.Linear(3*32*32, 1024, bias=use_bias)
-        self.fc2   = nn.Linear(1024, 1024, bias=use_bias)
-        self.fc3   = nn.Linear(1024, 512, bias=use_bias)
-        self.fc4   = nn.Linear(512, 256, bias=use_bias)
-        self.fc5   = nn.Linear(256, 128, bias=use_bias)
-        self.fc6   = nn.Linear(128, 10, bias=use_bias)
+        self.fc1 = nn.Linear(3 * 32 * 32, 1024, bias=use_bias)
+        self.fc2 = nn.Linear(1024, 1024, bias=use_bias)
+        self.fc3 = nn.Linear(1024, 512, bias=use_bias)
+        self.fc4 = nn.Linear(512, 256, bias=use_bias)
+        self.fc5 = nn.Linear(256, 128, bias=use_bias)
+        self.fc6 = nn.Linear(128, 10, bias=use_bias)
 
         if initializer == 'xavier':
             init_fn = nn.init.xavier_normal_
@@ -128,18 +137,18 @@ class MLP2(nn.Module):
         x = F.relu(self.fc3(x))
         x = F.relu(self.fc4(x))
         x = F.relu(self.fc5(x))
-        x = F.relu(self.fc6(x))
+        x = self.fc6(x)
         return x
 
 
 class MLP3(nn.Module):
     def __init__(self, use_bias=False, initializer='kaiming'):
         super().__init__()
-        self.fc1   = nn.Linear(3*32*32, 512, bias=use_bias)
-        self.fc2   = nn.Linear(512, 512, bias=use_bias)
-        self.fc3   = nn.Linear(512, 256, bias=use_bias)
-        self.fc4   = nn.Linear(256, 128, bias=use_bias)
-        self.fc5   = nn.Linear(128, 10, bias=use_bias)
+        self.fc1 = nn.Linear(3 * 32 * 32, 512, bias=use_bias)
+        self.fc2 = nn.Linear(512, 512, bias=use_bias)
+        self.fc3 = nn.Linear(512, 256, bias=use_bias)
+        self.fc4 = nn.Linear(256, 128, bias=use_bias)
+        self.fc5 = nn.Linear(128, 10, bias=use_bias)
 
         if initializer == 'xavier':
             init_fn = nn.init.xavier_normal_
