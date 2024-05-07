@@ -12,7 +12,8 @@ class affineSGD(Optimizer):
                  momentum=0, weight_decay=0,
                  use_bias=True, fullrank=True,
                  fixed_rand_vec=False, weight_only=True, 
-                 same_norm=False, norm=False, diag=False):
+                 same_norm=False, norm=False, diag=False,
+                 exponential=None):
         assert not (fullrank and diag), (
             "fullrank and diag are incompatible with each other")
         defaults = dict(lr=lr, momentum=momentum, weight_decay=weight_decay)
@@ -23,6 +24,7 @@ class affineSGD(Optimizer):
         self._same_norm = same_norm
         self._norm = norm
         self._diag = diag
+        self._exponential = exponential
 
         group = self.param_groups[0]
         params = group['params']
@@ -36,8 +38,11 @@ class affineSGD(Optimizer):
                 else:
                     rand_vec = torch.randn_like(param.data)
                     if self._diag:
-                        rand_vec += 1
-                        rand_vec = torch.clamp(rand_vec, 0.)
+                        if self._exponential:
+                            rand_vec = torch.exp(self._exponential * rand_vec)
+                        else:
+                            rand_vec += 1
+                            rand_vec = torch.clamp(rand_vec, 0.)
                     elif not self._same_norm and not self._norm:
                         rand_vec = rand_vec / rand_vec.norm()
                     rand_vecs.append(rand_vec)
@@ -56,8 +61,11 @@ class affineSGD(Optimizer):
                 else:
                     rand_vec = torch.randn_like(param.grad.data)
                     if self._diag:
-                        rand_vec += 1
-                        rand_vec = torch.clamp(rand_vec, 0.)
+                        if self._exponential:
+                            rand_vec = torch.exp(self._exponential * rand_vec)
+                        else:
+                            rand_vec += 1
+                            rand_vec = torch.clamp(rand_vec, 0.)
                     elif not self._same_norm and not self._norm:
                         rand_vec = rand_vec / rand_vec.norm()
                 if self._diag:

@@ -36,6 +36,7 @@ parser.add_argument('--weightonly', action='store_true')
 parser.add_argument('--samenorm', action='store_true')
 parser.add_argument('--norm', action='store_true')
 parser.add_argument('--diag', action='store_true')
+parser.add_argument('--exp', default=None, type=float)
 parser.add_argument('--optimizer', default='sgd', type=str)
 parser.add_argument('--log_dir', default='runs/cifar10', type=str)
 parser.add_argument('--epoch', default=200, type=int)
@@ -142,7 +143,8 @@ elif args.optimizer == 'gtk':
                           weight_only=args.weightonly,
                           same_norm=args.samenorm,
                           norm=args.norm,
-                          diag=args.diag)
+                          diag=args.diag,
+                          exponential=args.exp)
 else:
     raise ValueError(f"{args.optimizer} optimizer is not supported.")
 lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=200)
@@ -172,6 +174,10 @@ if args.diag:
     str_diag = '_diag'
 else:
     str_diag = ''
+if args.exp:
+    str_exp = f'_exp{args.exp}'
+else:
+    str_exp = ''
 if args.renorm is None:
     str_renorm = ''
 else:
@@ -186,9 +192,9 @@ else:
     str_extra = '_' + args.extra
 log_dir = os.path.join(
     args.log_dir, args.optimizer,
-    '%s_%s_lr%.3f_epoch%d_seed%d_init-%s%s%s%s%s%s%s%s%s%s' % (
-        args.model, args.act, args.lr, args.epoch, args.seed,
-        args.init, str_fullrank, str_rv, str_wo, str_sn, str_norm, str_diag,
+    '%s_%s_lr%.3f_epoch%d_seed%d_init-%s%s%s%s%s%s%s%s%s%s%s' % (
+        args.model, args.act, args.lr, args.epoch, args.seed, args.init,
+        str_fullrank, str_rv, str_wo, str_sn, str_norm, str_diag, str_exp,
         str_renorm, str_option3, str_extra))
 if not os.path.isdir(log_dir):
     os.makedirs(log_dir)
